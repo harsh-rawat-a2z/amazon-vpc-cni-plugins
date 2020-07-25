@@ -19,6 +19,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/aws/amazon-vpc-cni-plugins/network/netutils"
+
 	"github.com/aws/amazon-vpc-cni-plugins/network/vpc"
 
 	"github.com/Microsoft/hcsshim"
@@ -34,6 +36,9 @@ const (
 
 	// hnsEndpointNameFormat is the format of the names generated for HNS endpoints.
 	hnsEndpointNameFormat = "cid-%s"
+
+	// loopbackRouteEntryMask is the mask of loopback entry in routing table
+	loopbackRouteEntryMask = "255.255.255.255"
 )
 
 var (
@@ -262,6 +267,17 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 
 	// Return network interface MAC address.
 	ep.MACAddress, _ = net.ParseMAC(hnsResponse.MacAddress)
+
+	// For task-networking, we need to remove the stale route entries from the routing table
+	// Windows creates a loopback entry for each ENI by default which needs to be removed
+	if ep.TaskENI {
+		mask := net.ParseIP(loopbackRouteEntryMask)
+		err := netutils.New().DeleteRoute(&ep.IPAddress.IP, &mask, nil)
+		if err != nil {
+			log.Errorf("Failed to delete stale route entries: %v", err)
+			return err
+		}
+	}
 
 	return nil
 }

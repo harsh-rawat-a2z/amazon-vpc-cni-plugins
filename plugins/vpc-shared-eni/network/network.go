@@ -51,4 +51,5 @@ type Endpoint struct {
 	TapUserID   int
 	MACAddress  net.HardwareAddr
 	IPAddress   *net.IPNet
+	TaskENI     bool
 }
