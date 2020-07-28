@@ -270,7 +270,7 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 
 	// For task-networking, we need to remove the stale route entries from the routing table
 	// Windows creates a loopback entry for each ENI by default which needs to be removed
-	if ep.TaskENI {
+	if nw.TaskENI.Enable {
 		mask := net.ParseIP(loopbackRouteEntryMask)
 		err := netutils.New().DeleteRoute(&ep.IPAddress.IP, &mask, nil)
 		if err != nil {
