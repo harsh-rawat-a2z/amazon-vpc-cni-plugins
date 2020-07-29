@@ -37,6 +37,9 @@ const (
 	// hnsEndpointNameFormat is the format of the names generated for HNS endpoints.
 	hnsEndpointNameFormat = "cid-%s"
 
+	// natHNSEndpointNameFormat is the format of the names generated for Task Metadata endpoints
+	natHNSEndpointNameFormat = "nat-%s"
+
 	// loopbackRouteEntryMask is the mask of loopback entry in routing table
 	loopbackRouteEntryMask = "255.255.255.255"
 )
@@ -76,6 +79,8 @@ func (nb *BridgeBuilder) FindOrCreateNetwork(nw *Network) error {
 	if err == nil {
 		log.Infof("Found existing HNS network %s.", networkName)
 		return nil
+	} else if nw.TaskENI.EnableTaskMetadata {
+		return fmt.Errorf("%s network could not be found", nw.Name)
 	}
 
 	// Initialize the HNS network.
@@ -171,20 +176,25 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 		DNSServerList:      strings.Join(nw.DNSServers, ","),
 	}
 
-	// Set the endpoint IP address.
-	hnsEndpoint.IPAddress = ep.IPAddress.IP
-	pl, _ := ep.IPAddress.Mask.Size()
-	hnsEndpoint.PrefixLength = uint8(pl)
+	if !nw.TaskENI.EnableTaskMetadata {
+		// Set the endpoint IP address.
+		hnsEndpoint.IPAddress = ep.IPAddress.IP
+		pl, _ := ep.IPAddress.Mask.Size()
+		hnsEndpoint.PrefixLength = uint8(pl)
+	}
 
 	// SNAT endpoint traffic to ENI primary IP address...
 	var snatExceptions []string
-	if nw.VPCCIDRs == nil {
-		// ...except if the destination is in the same subnet as the ENI.
-		snatExceptions = []string{vpc.GetSubnetPrefix(nw.ENIIPAddress).String()}
-	} else {
-		// ...or, if known, the same VPC.
-		for _, cidr := range nw.VPCCIDRs {
-			snatExceptions = append(snatExceptions, cidr.String())
+
+	if !nw.TaskENI.EnableTaskMetadata {
+		if nw.VPCCIDRs == nil {
+			// ...except if the destination is in the same subnet as the ENI.
+			snatExceptions = []string{vpc.GetSubnetPrefix(nw.ENIIPAddress).String()}
+		} else {
+			// ...or, if known, the same VPC.
+			for _, cidr := range nw.VPCCIDRs {
+				snatExceptions = append(snatExceptions, cidr.String())
+			}
 		}
 	}
 	if nw.ServiceCIDR != "" {
@@ -403,6 +413,10 @@ func (nb *BridgeBuilder) checkHNSVersion() error {
 
 // generateHNSNetworkName generates a deterministic unique name for an HNS network.
 func (nb *BridgeBuilder) generateHNSNetworkName(nw *Network) string {
+	// For enabling Task Metadata, we want to connect our task to the nat network
+	if nw.TaskENI.EnableTaskMetadata {
+		return nw.Name
+	}
 	// Use the MAC address of the shared ENI as the deterministic unique identifier.
 	id := strings.Replace(nw.SharedENI.GetMACAddress().String(), ":", "", -1)
 	return fmt.Sprintf(hnsNetworkNameFormat, nw.Name, id)
@@ -415,5 +429,10 @@ func (nb *BridgeBuilder) generateHNSEndpointName(ep *Endpoint, id string) string
 		id = ep.ContainerID
 	}
 
-	return fmt.Sprintf(hnsEndpointNameFormat, id)
+	endpointName := fmt.Sprintf(hnsEndpointNameFormat, id)
+	if ep.TaskMetadataEndpoint {
+		endpointName = fmt.Sprintf(natHNSEndpointNameFormat, endpointName)
+	}
+
+	return endpointName
 }

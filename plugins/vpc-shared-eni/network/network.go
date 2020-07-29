@@ -47,11 +47,12 @@ type Network struct {
 
 // Endpoint represents a container network interface.
 type Endpoint struct {
-	ContainerID string
-	NetNSName   string
-	IfName      string
-	IfType      string
-	TapUserID   int
-	MACAddress  net.HardwareAddr
-	IPAddress   *net.IPNet
+	ContainerID          string
+	NetNSName            string
+	IfName               string
+	IfType               string
+	TapUserID            int
+	MACAddress           net.HardwareAddr
+	IPAddress            *net.IPNet
+	TaskMetadataEndpoint bool
 }

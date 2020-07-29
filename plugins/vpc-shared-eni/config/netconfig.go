@@ -63,7 +63,8 @@ type netConfigJSON struct {
 
 // TaskENI defines the Task Networking specific data required by the plugin
 type TaskENIConfig struct {
-	Enable bool `json:"enableTaskENI"`
+	Enable             bool `json:"enableTaskENI"`
+	EnableTaskMetadata bool `json:"enableTaskMetadata"`
 }
 
 const (

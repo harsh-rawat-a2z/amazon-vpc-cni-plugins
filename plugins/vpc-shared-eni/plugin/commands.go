@@ -76,12 +76,13 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 
 	// Find or create the container endpoint on the network.
 	ep := network.Endpoint{
-		ContainerID: args.ContainerID,
-		NetNSName:   args.Netns,
-		IfName:      args.IfName,
-		IfType:      netConfig.InterfaceType,
-		TapUserID:   netConfig.TapUserID,
-		IPAddress:   netConfig.IPAddress,
+		ContainerID:          args.ContainerID,
+		NetNSName:            args.Netns,
+		IfName:               args.IfName,
+		IfType:               netConfig.InterfaceType,
+		TapUserID:            netConfig.TapUserID,
+		IPAddress:            netConfig.IPAddress,
+		TaskMetadataEndpoint: nw.TaskENI.EnableTaskMetadata,
 	}
 
 	err = nb.FindOrCreateEndpoint(&nw, &ep)
