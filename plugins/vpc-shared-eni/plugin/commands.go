@@ -171,7 +171,9 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 		log.Errorf("Failed to delete endpoint, ignoring: %v.", err)
 	}
 
-	if netConfig.TaskENIConfig.NoInfra {
+	// We delete the network along with endpoint for task networking. However, on EKS, we only delete the endpoint.
+	// TaskENI is used to check if the plugin is executed for task networking.
+	if netConfig.TaskENIConfig.NoInfra || netConfig.TaskENIConfig.PauseContainer {
 		err = nb.DeleteNetwork(&nw)
 		if err != nil {
 			log.Errorf("Failed to delete network: %v.", err)
