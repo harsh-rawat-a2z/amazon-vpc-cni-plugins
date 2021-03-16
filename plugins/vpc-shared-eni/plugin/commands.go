@@ -43,11 +43,14 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		return err
 	}
 
-	// Find the ENI link.
-	err = sharedENI.AttachToLink()
-	if err != nil {
-		log.Errorf("Failed to find ENI link: %v.", err)
-		return err
+	// Find the ENI link if the CNI plugin is not used to setup Task IAM roles over Task Bridge
+	if !netConfig.TaskENIConfig.EnableTaskBridge {
+		// Find the ENI link.
+		err = sharedENI.AttachToLink()
+		if err != nil {
+			log.Errorf("Failed to find ENI link: %v.", err)
+			return err
+		}
 	}
 
 	// Call the operating system specific network builder.
@@ -76,18 +79,27 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 
 	// Find or create the container endpoint on the network.
 	ep := network.Endpoint{
-		ContainerID: args.ContainerID,
-		NetNSName:   args.Netns,
-		IfName:      args.IfName,
-		IfType:      netConfig.InterfaceType,
-		TapUserID:   netConfig.TapUserID,
-		IPAddress:   netConfig.IPAddress,
+		ContainerID:   args.ContainerID,
+		NetNSName:     args.Netns,
+		IfName:        args.IfName,
+		IfType:        netConfig.InterfaceType,
+		TapUserID:     netConfig.TapUserID,
+		IPAddress:     netConfig.IPAddress,
+		TaskENIConfig: netConfig.TaskENIConfig,
 	}
 
 	err = nb.FindOrCreateEndpoint(&nw, &ep)
 	if err != nil {
 		log.Errorf("Failed to create endpoint: %v.", err)
 		return err
+	}
+
+	// If the endpoint IP address and gateway IP address is not present in netconfig then populate these values from endpoint and network
+	if netConfig.IPAddress == nil {
+		netConfig.IPAddress = ep.IPAddress
+	}
+	if netConfig.GatewayIPAddress == nil {
+		netConfig.GatewayIPAddress = nw.GatewayIPAddress
 	}
 
 	// Generate CNI result.
@@ -138,13 +150,15 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 		return err
 	}
 
-	// Find the ENI link.
-	err = sharedENI.AttachToLink()
-	if err != nil {
-		log.Errorf("Failed to find ENI link: %v.", err)
-		return err
+	// Find the ENI link if the CNI plugin is not used to setup Task IAM roles over the Task Bridge
+	if !netConfig.TaskENIConfig.EnableTaskBridge {
+		// Find the ENI link.
+		err = sharedENI.AttachToLink()
+		if err != nil {
+			log.Errorf("Failed to find ENI link: %v.", err)
+			return err
+		}
 	}
-
 	// Call operating system specific handler.
 	nb := plugin.nb
 
@@ -157,12 +171,13 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 	}
 
 	ep := network.Endpoint{
-		ContainerID: args.ContainerID,
-		NetNSName:   args.Netns,
-		IfName:      args.IfName,
-		IfType:      netConfig.InterfaceType,
-		TapUserID:   netConfig.TapUserID,
-		IPAddress:   netConfig.IPAddress,
+		ContainerID:   args.ContainerID,
+		NetNSName:     args.Netns,
+		IfName:        args.IfName,
+		IfType:        netConfig.InterfaceType,
+		TapUserID:     netConfig.TapUserID,
+		IPAddress:     netConfig.IPAddress,
+		TaskENIConfig: netConfig.TaskENIConfig,
 	}
 
 	err = nb.DeleteEndpoint(&nw, &ep)
@@ -171,9 +186,8 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 		log.Errorf("Failed to delete endpoint, ignoring: %v.", err)
 	}
 
-	// We delete the network along with endpoint for task networking. However, on EKS, we only delete the endpoint.
-	// TaskENI is used to check if the plugin is executed for task networking.
-	if netConfig.TaskENIConfig.NoInfra || netConfig.TaskENIConfig.PauseContainer {
+	// We delete the network along with endpoint for task networking on EC2 and Fargate
+	if netConfig.TaskENIConfig.NoInfra || netConfig.TaskENIConfig.EnableTaskENI {
 		err = nb.DeleteNetwork(&nw)
 		if err != nil {
 			log.Errorf("Failed to delete network: %v.", err)

@@ -37,6 +37,10 @@ const (
 
 	// hnsEndpointNameFormat is the format of the names generated for HNS endpoints.
 	hnsEndpointNameFormat = "cid-%s"
+
+	// taskBridgeEndpointNameFormat is the format of the names generated for HNS endpoints connecting task compartments
+	// to the task bridge for accessing Task IAM roles and Task Metadata
+	taskBridgeEndpointNameFormat = "task-%s"
 )
 
 var (
@@ -79,6 +83,8 @@ func (nb *BridgeBuilder) FindOrCreateNetwork(nw *Network) error {
 	if err == nil {
 		log.Infof("Found existing HNS network %s.", networkName)
 		return nil
+	} else if nw.TaskENIConfig.EnableTaskBridge {
+		return fmt.Errorf("%s network could not be found", nw.Name)
 	}
 
 	// Initialize the HNS network.
@@ -160,6 +166,15 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 			err = nb.attachEndpoint(hnsEndpoint, ep.ContainerID)
 		}
 
+		// For task bridge, the endpoint ip is allocated by HNS
+		// We store the endpoint ip as well as the gateway ip
+		if nw.TaskENIConfig.EnableTaskBridge {
+			ep.IPAddress = &net.IPNet{
+				IP:   hnsEndpoint.IPAddress,
+				Mask: net.CIDRMask(int(hnsEndpoint.PrefixLength), 32),
+			}
+			nw.GatewayIPAddress = net.ParseIP(hnsEndpoint.GatewayAddress)
+		}
 		ep.MACAddress, _ = net.ParseMAC(hnsEndpoint.MacAddress)
 		return err
 	} else {
@@ -178,10 +193,12 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 		DNSServerList:      strings.Join(nw.DNSServers, ","),
 	}
 
-	// Set the endpoint IP address.
-	hnsEndpoint.IPAddress = ep.IPAddress.IP
-	pl, _ := ep.IPAddress.Mask.Size()
-	hnsEndpoint.PrefixLength = uint8(pl)
+	if ep.IPAddress != nil {
+		// Set the endpoint IP address.
+		hnsEndpoint.IPAddress = ep.IPAddress.IP
+		pl, _ := ep.IPAddress.Mask.Size()
+		hnsEndpoint.PrefixLength = uint8(pl)
+	}
 
 	// SNAT endpoint traffic to ENI primary IP address...
 	var snatExceptions []string
@@ -274,6 +291,16 @@ func (nb *BridgeBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 
 	// Return network interface MAC address.
 	ep.MACAddress, _ = net.ParseMAC(hnsResponse.MacAddress)
+
+	// For task bridge, the endpoint ip is allocated by HNS
+	// We store the endpoint ip as well as the gateway ip
+	if nw.TaskENIConfig.EnableTaskBridge {
+		ep.IPAddress = &net.IPNet{
+			IP:   hnsResponse.IPAddress,
+			Mask: net.CIDRMask(int(hnsResponse.PrefixLength), 32),
+		}
+		nw.GatewayIPAddress = net.ParseIP(hnsResponse.GatewayAddress)
+	}
 
 	return nil
 }
@@ -519,6 +546,10 @@ func (nb *BridgeBuilder) checkHNSVersion() error {
 
 // generateHNSNetworkName generates a deterministic unique name for an HNS network.
 func (nb *BridgeBuilder) generateHNSNetworkName(nw *Network) string {
+	// Task bridge network has a pre-defined name
+	if nw.TaskENIConfig.EnableTaskBridge {
+		return nw.Name
+	}
 	// Use the MAC address of the shared ENI as the deterministic unique identifier.
 	id := strings.Replace(nw.SharedENI.GetMACAddress().String(), ":", "", -1)
 	return fmt.Sprintf(hnsNetworkNameFormat, nw.Name, id)
@@ -531,5 +562,11 @@ func (nb *BridgeBuilder) generateHNSEndpointName(ep *Endpoint, id string) string
 		id = ep.ContainerID
 	}
 
-	return fmt.Sprintf(hnsEndpointNameFormat, id)
+	endpointName := fmt.Sprintf(hnsEndpointNameFormat, id)
+	if ep.TaskENIConfig.EnableTaskBridge {
+		// Differentiate Task ENI endpoints from Task Bridge endpoints
+		endpointName = fmt.Sprintf(taskBridgeEndpointNameFormat, endpointName)
+	}
+
+	return endpointName
 }

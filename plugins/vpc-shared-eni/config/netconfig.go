@@ -62,8 +62,9 @@ type netConfigJSON struct {
 }
 
 type TaskENIConfig struct {
-	NoInfra        bool `json:"noInfra"`
-	PauseContainer bool `json:"pauseContainer"`
+	NoInfra          bool `json:"noInfra"`
+	EnableTaskENI    bool `json:"enableTaskENI"`
+	EnableTaskBridge bool `json:"enableTaskBridge"`
 }
 
 const (
