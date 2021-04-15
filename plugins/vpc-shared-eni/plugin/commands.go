@@ -46,11 +46,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 	// Find the ENI link if the CNI plugin is not used to setup Task IAM roles over Task Bridge
 	if !netConfig.TaskENIConfig.EnableTaskBridge {
 		// Find the ENI link.
-		err = sharedENI.AttachToLink()
-		if err != nil {
-			log.Errorf("Failed to find ENI link: %v.", err)
-			return err
-		}
+		sharedENI.AttachToLink()
 	}
 
 	// Call the operating system specific network builder.
@@ -84,6 +80,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		IfName:        args.IfName,
 		IfType:        netConfig.InterfaceType,
 		TapUserID:     netConfig.TapUserID,
+		MACAddress:    sharedENI.GetMACAddress(),
 		IPAddress:     netConfig.IPAddress,
 		TaskENIConfig: netConfig.TaskENIConfig,
 	}
@@ -150,15 +147,6 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 		return err
 	}
 
-	// Find the ENI link if the CNI plugin is not used to setup Task IAM roles over the Task Bridge
-	if !netConfig.TaskENIConfig.EnableTaskBridge {
-		// Find the ENI link.
-		err = sharedENI.AttachToLink()
-		if err != nil {
-			log.Errorf("Failed to find ENI link: %v.", err)
-			return err
-		}
-	}
 	// Call operating system specific handler.
 	nb := plugin.nb
 
