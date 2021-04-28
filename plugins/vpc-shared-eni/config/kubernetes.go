@@ -50,7 +50,7 @@ var (
 )
 
 // parseKubernetesArgs parses Kubernetes-specific CNI arguments.
-func parseKubernetesArgs(netConfig *NetConfig, args *cniSkel.CmdArgs) error {
+func parseKubernetesArgs(netConfig *NetConfig, args *cniSkel.CmdArgs, isAddCmd bool) error {
 	if args == nil || args.Args == "" {
 		return nil
 	}
@@ -68,6 +68,13 @@ func parseKubernetesArgs(netConfig *NetConfig, args *cniSkel.CmdArgs) error {
 	kc.Namespace = string(ka.K8S_POD_NAMESPACE)
 	kc.PodName = string(ka.K8S_POD_NAME)
 	kc.PodInfraContainerID = string(ka.K8S_POD_INFRA_CONTAINER_ID)
+
+	// The only additional information we need to query from API server is the pod IP address,
+	// which is required only for ADD commands. Also the API server may have deleted the pod
+	// object already in the DEL path.
+	if !isAddCmd {
+		return nil
+	}
 
 	if kc.Namespace == "" || kc.PodName == "" {
 		return fmt.Errorf("missing required args %v", kc)
