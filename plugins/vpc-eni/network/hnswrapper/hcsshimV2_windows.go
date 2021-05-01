@@ -48,11 +48,13 @@ func (builder *builder) deleteHNSEndpointV2(ep *HNSEndpoint) error {
 		return err
 	}
 
-	// Remove the HNS endpoint from the namespace.
+	// Remove the HNS endpoint from the namespace if we can.
+	// Since HCN Namespace and HNS Endpoint have a 1-1 relationship, therefore,
+	// even if detachment of endpoint from namespace fails, we should delete it.
 	log.Infof("Removing HNS endpoint %s from ns %s.", hnsEndpoint.Id, ep.NetNS.NetNSName)
 	err = hcn.RemoveNamespaceEndpoint(ep.NetNS.NetNSName, hnsEndpoint.Id)
 	if err != nil {
-		return err
+		log.Errorf("Failed to remove HNS endpoint %s from ns %s. Ignoring.", hnsEndpoint.Id, ep.NetNS.NetNSName)
 	}
 
 	// Delete the HNS endpoint.

@@ -43,7 +43,8 @@ func (builder *builder) deleteHNSEndpointV1(ep *HNSEndpoint) error {
 	// Detach the HNS endpoint from the container's network namespace.
 	log.Infof("Detaching HNS endpoint %s from container %s netns.", hnsEndpoint.Id, ep.Container.ContainerID)
 	err = hcsshim.HotDetachEndpoint(ep.Container.ContainerID, hnsEndpoint.Id)
-	if err != nil {
+	// We should continue if infra container itself is not running.
+	if err != nil && err != hcsshim.ErrComputeSystemDoesNotExist {
 		return err
 	}
 
