@@ -187,7 +187,7 @@ func (nb *NetBuilder) DeleteEndpoint(nw *Network, ep *Endpoint) error {
 	// Generate network name here as endpoint is deleted before the network.
 	nw.Name = nb.generateHNSNetworkName(nw)
 
-	// Create HNS endpoint config
+	// Create HNS endpoint config.
 	hnsEndpoint := &hnswrapper.HNSEndpoint{
 		Name:      "",
 		NetNS:     hnswrapper.HCSNamespace{UseNamespace: false},

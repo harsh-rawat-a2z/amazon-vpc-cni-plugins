@@ -29,7 +29,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 	// Parse network configuration.
 	netConfig, err := config.New(args)
 	if err != nil {
-		log.Errorf("Failed to parse netconfig from args: %v.", err)
+		log.Errorf("Executing Add: Failed to parse netconfig from args: %v.", err)
 		return errors.Errorf("failed to parse config: %v", err)
 	}
 
@@ -109,7 +109,7 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 	// Parse network configuration.
 	netConfig, err := config.New(args)
 	if err != nil {
-		log.Errorf("Failed to parse netconfig from args: %v.", err)
+		log.Errorf("Executing Del: Failed to parse netconfig from args: %v.", err)
 		return errors.Errorf("failed to parse config: %v", err)
 	}
 

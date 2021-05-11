@@ -62,11 +62,8 @@ func New(args *cniSkel.CmdArgs) (*NetConfig, error) {
 		return nil, fmt.Errorf("missing required parameter network name")
 	}
 
-	// If new network creation is required, then ENI Name, Mac and ENI IP address are required.
+	// If new network creation is required, then ENI Mac and ENI IP address are required.
 	if !config.UseExistingNetwork {
-		if config.ENIName == "" {
-			return nil, fmt.Errorf("missing required parameter ENIName")
-		}
 		if config.ENIMACAddress == "" {
 			return nil, fmt.Errorf("missing required parameter ENIMACAddress")
 		}

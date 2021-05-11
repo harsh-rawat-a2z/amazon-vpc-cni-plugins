@@ -68,6 +68,11 @@ func (builder *builder) FindOrCreateHNSNetwork(nw *HNSNetwork) (bool, error) {
 		log.Errorf("Could not find an existing HNS network: %v.", err)
 		return existingNetwork, err
 	}
+	// Return an error if network creation is required but network adapter name is empty.
+	if len(nw.NetworkAdapterName) == 0 {
+		log.Error("Failed to create HNS network: empty network adapter name.")
+		return existingNetwork, errors.New("failed to create hns network due to empty network adapter name")
+	}
 
 	// Create config for new HNS network.
 	hnsNetwork = &hcsshim.HNSNetwork{
