@@ -16,15 +16,13 @@ package network
 import (
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/aws/amazon-vpc-cni-plugins/network/vpc"
-	log "github.com/cihub/seelog"
-
 	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-eni/network/hnswrapper"
+
+	log "github.com/cihub/seelog"
 )
 
 const (
@@ -42,20 +40,32 @@ const (
 	netshDisableInterface = "netsh interface set interface name=\"%s\" admin=disabled"
 )
 
-// NetBuilder implements the Builder interface for Windows.
-type NetBuilder struct {
+// NSType identifies the namespace type for the containers.
+type NSType int
+
+const (
+	// infraContainerNS identifies an Infra container NS for networking setup.
+	infraContainerNS NSType = iota
+	// nonInfraContainerNS identifies sharing of infra container NS for networking setup.
+	nonInfraContainerNS
+	// hcsNamespace identifies HCS NS for networking setup.
+	hcsNamespace
+)
+
+// netBuilder implements the Builder interface for Windows.
+type netBuilder struct {
 	hnswrapper hnswrapper.WindowsNetworkBuilder
 }
 
 // NewNetworkBuilder returns a new instance of NetBuilder.
 func NewNetworkBuilder() Builder {
-	return &NetBuilder{
+	return &netBuilder{
 		hnswrapper: hnswrapper.NewWindowsNetworkBuilder(),
 	}
 }
 
 // FindOrCreateNetwork creates a new HNS network.
-func (nb *NetBuilder) FindOrCreateNetwork(nw *Network) error {
+func (nb *netBuilder) FindOrCreateNetwork(nw *Network) error {
 	// Check if the HNS version is supported.
 	err := nb.hnswrapper.CheckHNSVersion(hnswrapper.HnsDefaultMinVersion)
 	if err != nil {
@@ -65,9 +75,8 @@ func (nb *NetBuilder) FindOrCreateNetwork(nw *Network) error {
 	nw.Name = nb.generateHNSNetworkName(nw)
 	// Create the HNS network configuration.
 	networkConfig := &hnswrapper.HNSNetwork{
-		Name:        nw.Name,
-		Type:        hnsTransparentNetworkType,
-		ShouldExist: nw.ShouldExist,
+		Name: nw.Name,
+		Type: hnsTransparentNetworkType,
 	}
 
 	if nw.ENI != nil {
@@ -101,7 +110,7 @@ func (nb *NetBuilder) FindOrCreateNetwork(nw *Network) error {
 }
 
 // DeleteNetwork deletes an existing HNS network.
-func (nb *NetBuilder) DeleteNetwork(nw *Network) error {
+func (nb *netBuilder) DeleteNetwork(nw *Network) error {
 	// Create the network config required for network deletion.
 	networkConfig := &hnswrapper.HNSNetwork{
 		Name: nw.Name,
@@ -112,7 +121,7 @@ func (nb *NetBuilder) DeleteNetwork(nw *Network) error {
 }
 
 // FindOrCreateEndpoint creates a new HNS endpoint in the network.
-func (nb *NetBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
+func (nb *netBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	// Create the HNS endpoint config.
 	hnsEndpoint := &hnswrapper.HNSEndpoint{
 		Name:               "",
@@ -129,20 +138,17 @@ func (nb *NetBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	if ep.IPAddress != nil {
 		hnsEndpoint.IPAddress = ep.IPAddress
 	}
-	// Endpoint name would be generated based on the unique identifier for the task i.e. infra container id or netns.
-	if ep.NoInfraContainer {
+
+	nsType, namespaceIdentifier := nb.getNamespaceIdentifier(ep)
+	hnsEndpoint.Name = nb.generateHNSEndpointName(nw.Name, namespaceIdentifier)
+
+	if nsType == hcsNamespace {
 		hnsEndpoint.NetNS.UseNamespace = true
-		hnsEndpoint.NetNS.NetNSName = ep.NetNSName
-		hnsEndpoint.Name = nb.generateHNSEndpointName(nw.Name, ep.NetNSName)
+		hnsEndpoint.NetNS.NetNSName = namespaceIdentifier
 	} else {
-		isInfraContainer, infraContainerID, err := nb.getInfraContainerID(ep)
-		if err != nil {
-			return err
-		}
 		hnsEndpoint.Container.ContainerID = ep.ContainerID
-		hnsEndpoint.Container.IsInfraContainer = isInfraContainer
-		hnsEndpoint.Container.InfraContainerID = infraContainerID
-		hnsEndpoint.Name = nb.generateHNSEndpointName(nw.Name, infraContainerID)
+		hnsEndpoint.Container.InfraContainerID = namespaceIdentifier
+		hnsEndpoint.Container.IsInfraContainer = nsType == infraContainerNS
 	}
 
 	// Create or Find the HNS endpoint.
@@ -183,7 +189,7 @@ func (nb *NetBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 }
 
 // DeleteEndpoint deletes an existing HNS endpoint.
-func (nb *NetBuilder) DeleteEndpoint(nw *Network, ep *Endpoint) error {
+func (nb *netBuilder) DeleteEndpoint(nw *Network, ep *Endpoint) error {
 	// Generate network name here as endpoint is deleted before the network.
 	nw.Name = nb.generateHNSNetworkName(nw)
 
@@ -194,24 +200,19 @@ func (nb *NetBuilder) DeleteEndpoint(nw *Network, ep *Endpoint) error {
 		Container: hnswrapper.AttachedContainer{IsInfraContainer: false},
 	}
 
-	// Endpoint name would be generated based on the unique identifier for the task i.e. infra container id or netns.
-	if ep.NoInfraContainer {
+	nsType, namespaceIdentifier := nb.getNamespaceIdentifier(ep)
+	hnsEndpoint.Name = nb.generateHNSEndpointName(nw.Name, namespaceIdentifier)
+
+	if nsType == hcsNamespace {
 		hnsEndpoint.NetNS.UseNamespace = true
 		hnsEndpoint.NetNS.NetNSName = ep.NetNSName
-		hnsEndpoint.Name = nb.generateHNSEndpointName(nw.Name, ep.NetNSName)
 	} else {
-		isInfraContainer, infraContainerID, err := nb.getInfraContainerID(ep)
-		if err != nil {
-			return err
-		}
 		hnsEndpoint.Container.ContainerID = ep.ContainerID
-		hnsEndpoint.Container.IsInfraContainer = isInfraContainer
-		hnsEndpoint.Container.InfraContainerID = infraContainerID
-		hnsEndpoint.Name = nb.generateHNSEndpointName(nw.Name, infraContainerID)
-
-		// Network deletion should be performed only for the infra container.
-		if !isInfraContainer {
-			nw.ShouldExist = true
+		hnsEndpoint.Container.InfraContainerID = namespaceIdentifier
+		hnsEndpoint.Container.IsInfraContainer = nsType == infraContainerNS
+		// For non-infra containers, the network must not be deleted.
+		if nsType == nonInfraContainerNS {
+			nw.UseExisting = true
 		}
 	}
 
@@ -220,8 +221,8 @@ func (nb *NetBuilder) DeleteEndpoint(nw *Network, ep *Endpoint) error {
 }
 
 // generateHNSNetworkName generates a deterministic unique name for an HNS network.
-func (nb *NetBuilder) generateHNSNetworkName(nw *Network) string {
-	if nw.ShouldExist {
+func (nb *netBuilder) generateHNSNetworkName(nw *Network) string {
+	if nw.UseExisting {
 		return nw.Name
 	}
 
@@ -231,35 +232,38 @@ func (nb *NetBuilder) generateHNSNetworkName(nw *Network) string {
 }
 
 // generateHNSEndpointName generates a deterministic unique name for the HNS Endpoint.
-func (nb *NetBuilder) generateHNSEndpointName(networkName string, identifier string) string {
+func (nb *netBuilder) generateHNSEndpointName(networkName string, identifier string) string {
 	return fmt.Sprintf(hnsEndpointNameFormat, networkName, identifier)
 }
 
-// getInfraContainerID returns the infrastructure container ID for the given endpoint.
-func (nb *NetBuilder) getInfraContainerID(ep *Endpoint) (bool, string, error) {
-	var isInfraContainer bool
-	var infraContainerID string
+// getNamespaceIdentifier identifies the namespace type and returns the appropriate identifier.
+func (nb *netBuilder) getNamespaceIdentifier(ep *Endpoint) (NSType, string) {
+	var netNSType NSType
+	var namespaceIdentifier string
 
 	if ep.NetNSName == "" || ep.NetNSName == "none" {
 		// This is the first, i.e. infrastructure, container in the group.
-		isInfraContainer = true
-		infraContainerID = ep.ContainerID
+		// The namespace identifier for such containers would be their container ID.
+		netNSType = infraContainerNS
+		namespaceIdentifier = ep.ContainerID
 	} else if strings.HasPrefix(ep.NetNSName, containerPrefix) {
 		// This is a workload container sharing the netns of a previously created infra container.
-		isInfraContainer = false
-		infraContainerID = strings.TrimPrefix(ep.NetNSName, containerPrefix)
-		log.Infof("Container %s shares netns of container %s.", ep.ContainerID, infraContainerID)
+		// The namespace identifier for such containers would be the infra container's ID.
+		netNSType = nonInfraContainerNS
+		namespaceIdentifier = strings.TrimPrefix(ep.NetNSName, containerPrefix)
+		log.Infof("Container %s shares netns of container %s.", ep.ContainerID, namespaceIdentifier)
 	} else {
-		// This is an unexpected case.
-		log.Errorf("Failed to parse netns %s of container %s.", ep.NetNSName, ep.ContainerID)
-		return false, "", fmt.Errorf("failed to parse netns %s", ep.NetNSName)
+		// This plugin invocation does not need an infra container and uses an existing HCN Namespace.
+		// The namespace identifier would be the HCN Namespace id.
+		netNSType = hcsNamespace
+		namespaceIdentifier = ep.NetNSName
 	}
 
-	return isInfraContainer, infraContainerID, nil
+	return netNSType, namespaceIdentifier
 }
 
 // disableInterface disables the network interface with the provided name.
-func (nb *NetBuilder) disableInterface(adapterName string) error {
+func (nb *netBuilder) disableInterface(adapterName string) error {
 	// Check if the interface exists.
 	iface, err := net.InterfaceByName(adapterName)
 	if err != nil {
@@ -279,14 +283,4 @@ func (nb *NetBuilder) disableInterface(adapterName string) error {
 		}
 	}
 	return nil
-}
-
-// GetLogfilePath returns the platform specific log file path.
-func GetLogfilePath() string {
-	programData := os.Getenv("ProgramData")
-	if len(programData) == 0 {
-		programData = `C:\ProgramData`
-	}
-
-	return filepath.Join(programData, "Amazon", "ECS", "log", "vpc-eni.log")
 }

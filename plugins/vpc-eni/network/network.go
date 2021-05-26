@@ -35,14 +35,13 @@ type Network struct {
 	GatewayIPAddress    net.IP
 	DNSServers          []string
 	DNSSuffixSearchList []string
-	ShouldExist         bool
+	UseExisting         bool
 }
 
 // Endpoint represents a container network interface.
 type Endpoint struct {
-	ContainerID      string
-	NetNSName        string
-	IPAddress        *net.IPNet
-	MACAddress       net.HardwareAddr
-	NoInfraContainer bool
+	ContainerID string
+	NetNSName   string
+	IPAddress   *net.IPNet
+	MACAddress  net.HardwareAddr
 }

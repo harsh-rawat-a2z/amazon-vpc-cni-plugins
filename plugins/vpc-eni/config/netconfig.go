@@ -19,8 +19,8 @@ import (
 	"net"
 
 	"github.com/aws/amazon-vpc-cni-plugins/network/vpc"
-	log "github.com/cihub/seelog"
 
+	log "github.com/cihub/seelog"
 	cniSkel "github.com/containernetworking/cni/pkg/skel"
 	cniTypes "github.com/containernetworking/cni/pkg/types"
 )
@@ -32,7 +32,6 @@ type NetConfig struct {
 	ENIMACAddress      net.HardwareAddr
 	ENIIPAddress       *net.IPNet
 	GatewayIPAddress   net.IP
-	NoInfraContainer   bool
 	UseExistingNetwork bool
 }
 
@@ -43,7 +42,6 @@ type netConfigJSON struct {
 	ENIMACAddress      string `json:"eniMACAddress"`
 	ENIIPAddress       string `json:"eniIPAddress"`
 	GatewayIPAddress   string `json:"gatewayIPAddress"`
-	NoInfraContainer   bool   `json:"noInfraContainer"`
 	UseExistingNetwork bool   `json:"useExistingNetwork"`
 }
 
@@ -57,7 +55,10 @@ func New(args *cniSkel.CmdArgs) (*NetConfig, error) {
 	}
 
 	// Perform validations on the received config.
+
 	// If we are supposed to use an existing network then network name is required.
+	// This check is for backward compatibility in case older cni versions are being used
+	// which did not validate network name before addNetwork call.
 	if config.UseExistingNetwork && config.Name == "" {
 		return nil, fmt.Errorf("missing required parameter network name")
 	}
@@ -72,16 +73,10 @@ func New(args *cniSkel.CmdArgs) (*NetConfig, error) {
 		}
 	}
 
-	// If there is no infra container then namespace id is required.
-	if config.NoInfraContainer && args.Netns == "" {
-		return nil, fmt.Errorf("missing required parameter netns")
-	}
-
 	// Parse the received config into NetConfig.
 	netConfig := &NetConfig{
 		NetConf:            config.NetConf,
 		ENIName:            config.ENIName,
-		NoInfraContainer:   config.NoInfraContainer,
 		UseExistingNetwork: config.UseExistingNetwork,
 	}
 

@@ -64,7 +64,7 @@ build: all-binaries unit-test
 
 # Build the vpc-eni CNI plugin.
 $(BUILD_DIR)/vpc-eni: $(VPC_ENI_PLUGIN_SOURCE_FILES) $(COMMON_SOURCE_FILES)
-	GOOS=windows GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
 	go build \
 		-installsuffix cgo \
 		-v \

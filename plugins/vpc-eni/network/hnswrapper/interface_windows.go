@@ -43,7 +43,6 @@ type HNSNetwork struct {
 	NetworkAdapterName string
 	AddressPrefix      string
 	Gateway            string
-	ShouldExist        bool
 }
 
 // HNSEndpoint is the configuration of the HNS endpoint.

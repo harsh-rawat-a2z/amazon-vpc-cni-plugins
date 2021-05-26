@@ -15,7 +15,6 @@ package hnswrapper
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 
@@ -63,15 +62,10 @@ func (builder *builder) FindOrCreateHNSNetwork(nw *HNSNetwork) (bool, error) {
 		return existingNetwork, nil
 	}
 
-	// Return an error if an existing network was to be used but is not available.
-	if nw.ShouldExist {
-		log.Errorf("Could not find an existing HNS network: %v.", err)
-		return existingNetwork, err
-	}
 	// Return an error if network creation is required but network adapter name is empty.
 	if len(nw.NetworkAdapterName) == 0 {
 		log.Error("Failed to create HNS network: empty network adapter name.")
-		return existingNetwork, errors.New("failed to create hns network due to empty network adapter name")
+		return existingNetwork, fmt.Errorf("failed to create hns network due to empty network adapter name")
 	}
 
 	// Create config for new HNS network.
@@ -217,7 +211,7 @@ func (builder *builder) CreatePolicy(ep *HNSEndpoint, policy interface{}) error 
 
 	default:
 		log.Error("Failed to create unsupported policy type.")
-		return errors.New("failed to create unsupported policy type")
+		return fmt.Errorf("failed to create unsupported policy type")
 	}
 
 	buf, err := json.Marshal(policy)

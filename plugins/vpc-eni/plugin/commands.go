@@ -17,11 +17,11 @@ import (
 	"github.com/aws/amazon-vpc-cni-plugins/network/eni"
 	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-eni/config"
 	"github.com/aws/amazon-vpc-cni-plugins/plugins/vpc-eni/network"
+
 	log "github.com/cihub/seelog"
 	cniSkel "github.com/containernetworking/cni/pkg/skel"
 	cniTypes "github.com/containernetworking/cni/pkg/types"
 	cniTypesCurrent "github.com/containernetworking/cni/pkg/types/current"
-	"github.com/pkg/errors"
 )
 
 // Add is the CNI ADD command handler.
@@ -30,7 +30,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 	netConfig, err := config.New(args)
 	if err != nil {
 		log.Errorf("Executing Add: Failed to parse netconfig from args: %v.", err)
-		return errors.Errorf("failed to parse config: %v", err)
+		return err
 	}
 
 	log.Infof("Executing ADD with netconfig: %+v ContainerID:%v Netns:%v IfName:%v Args:%v.",
@@ -51,28 +51,27 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 		GatewayIPAddress:    netConfig.GatewayIPAddress,
 		DNSServers:          netConfig.DNS.Nameservers,
 		DNSSuffixSearchList: netConfig.DNS.Search,
-		ShouldExist:         netConfig.UseExistingNetwork,
+		UseExisting:         netConfig.UseExistingNetwork,
 	}
 
 	err = nb.FindOrCreateNetwork(&nw)
 	if err != nil {
 		log.Errorf("Failed to create network: %v.", err)
-		return errors.Errorf("failed to create/find network: %v", err)
+		return err
 	}
 
 	// Find or create the container endpoint on the network.
 	ep := network.Endpoint{
-		ContainerID:      args.ContainerID,
-		NetNSName:        args.Netns,
-		IPAddress:        netConfig.ENIIPAddress,
-		MACAddress:       netConfig.ENIMACAddress,
-		NoInfraContainer: netConfig.NoInfraContainer,
+		ContainerID: args.ContainerID,
+		NetNSName:   args.Netns,
+		IPAddress:   netConfig.ENIIPAddress,
+		MACAddress:  netConfig.ENIMACAddress,
 	}
 
 	err = nb.FindOrCreateEndpoint(&nw, &ep)
 	if err != nil {
 		log.Errorf("Failed to create endpoint: %v.", err)
-		return errors.Errorf("failed to create/find endpoint: %v", err)
+		return err
 	}
 
 	// Generate CNI result.
@@ -110,7 +109,7 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 	netConfig, err := config.New(args)
 	if err != nil {
 		log.Errorf("Executing Del: Failed to parse netconfig from args: %v.", err)
-		return errors.Errorf("failed to parse config: %v", err)
+		return err
 	}
 
 	log.Infof("Executing DEL with netconfig: %+v ContainerID:%v Netns:%v IfName:%v Args:%v.",
@@ -126,15 +125,14 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 	nw := network.Network{
 		Name:        netConfig.Name,
 		ENI:         vpcENI,
-		ShouldExist: netConfig.UseExistingNetwork,
+		UseExisting: netConfig.UseExistingNetwork,
 	}
 
 	ep := network.Endpoint{
-		ContainerID:      args.ContainerID,
-		NetNSName:        args.Netns,
-		IPAddress:        netConfig.ENIIPAddress,
-		MACAddress:       netConfig.ENIMACAddress,
-		NoInfraContainer: netConfig.NoInfraContainer,
+		ContainerID: args.ContainerID,
+		NetNSName:   args.Netns,
+		IPAddress:   netConfig.ENIIPAddress,
+		MACAddress:  netConfig.ENIMACAddress,
 	}
 
 	err = nb.DeleteEndpoint(&nw, &ep)
@@ -144,11 +142,11 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 	}
 
 	// If we are not re-using the network, then delete it.
-	if !nw.ShouldExist {
+	if !nw.UseExisting {
 		err = nb.DeleteNetwork(&nw)
 		if err != nil {
 			log.Errorf("Failed to delete network: %v.", err)
-			return errors.Errorf("failed to delete network: %v", err)
+			return err
 		}
 	}
 
