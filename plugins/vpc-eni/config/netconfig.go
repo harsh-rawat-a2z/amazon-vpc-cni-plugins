@@ -30,19 +30,19 @@ type NetConfig struct {
 	cniTypes.NetConf
 	ENIName            string
 	ENIMACAddress      net.HardwareAddr
-	ENIIPAddress       *net.IPNet
-	GatewayIPAddress   net.IP
+	ENIIPAddresses     []*net.IPNet
+	GatewayIPAddresses []net.IP
 	UseExistingNetwork bool
 }
 
 // netConfigJSON defines the network configuration JSON file format for the vpc-eni plugin.
 type netConfigJSON struct {
 	cniTypes.NetConf
-	ENIName            string `json:"eniName"`
-	ENIMACAddress      string `json:"eniMACAddress"`
-	ENIIPAddress       string `json:"eniIPAddress"`
-	GatewayIPAddress   string `json:"gatewayIPAddress"`
-	UseExistingNetwork bool   `json:"useExistingNetwork"`
+	ENIName            string   `json:"eniName"`
+	ENIMACAddress      string   `json:"mac"`
+	ENIIPAddresses     []string `json:"ip-addresses"`
+	GatewayIPAddresses []string `json:"gateway-ip-addresses"`
+	UseExistingNetwork bool     `json:"useExistingNetwork"`
 }
 
 // New creates a new NetConfig object by parsing the given CNI arguments.
@@ -68,7 +68,7 @@ func New(args *cniSkel.CmdArgs) (*NetConfig, error) {
 		if config.ENIMACAddress == "" {
 			return nil, fmt.Errorf("missing required parameter ENIMACAddress")
 		}
-		if config.ENIIPAddress == "" {
+		if len(config.ENIIPAddresses) == 0 {
 			return nil, fmt.Errorf("missing required parameter ENIIPAddress")
 		}
 	}
@@ -88,20 +88,22 @@ func New(args *cniSkel.CmdArgs) (*NetConfig, error) {
 		}
 	}
 
-	// Parse the ENI IP address.
-	if config.ENIIPAddress != "" {
-		netConfig.ENIIPAddress, err = vpc.GetIPAddressFromString(config.ENIIPAddress)
+	// Parse the ENI IP addresses.
+	for _, ipAddr := range config.ENIIPAddresses {
+		parsedIPAddr, err := vpc.GetIPAddressFromString(ipAddr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ENIIPAddress %s", config.ENIIPAddress)
+			return nil, fmt.Errorf("invalid ENIIPAddress %s", ipAddr)
 		}
+		netConfig.ENIIPAddresses = append(netConfig.ENIIPAddresses, parsedIPAddr)
 	}
 
-	// Parse the optional gateway IP address.
-	if config.GatewayIPAddress != "" {
-		netConfig.GatewayIPAddress = net.ParseIP(config.GatewayIPAddress)
-		if netConfig.GatewayIPAddress == nil {
-			return nil, fmt.Errorf("invalid GatewayIPAddress %s", config.GatewayIPAddress)
+	// Parse the optional gateway IP addresses.
+	for _, gatewayIPAddr := range config.GatewayIPAddresses {
+		parsedGatewayIPAddr := net.ParseIP(gatewayIPAddr)
+		if parsedGatewayIPAddr == nil {
+			return nil, fmt.Errorf("invalid GatewayIPAddress %s", gatewayIPAddr)
 		}
+		netConfig.GatewayIPAddresses = append(netConfig.GatewayIPAddresses, parsedGatewayIPAddr)
 	}
 
 	// Validation and parsing complete. Return the parsed NetConfig object.

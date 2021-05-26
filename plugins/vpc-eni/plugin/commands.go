@@ -47,8 +47,8 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 	nw := network.Network{
 		Name:                netConfig.Name,
 		ENI:                 vpcENI,
-		IPAddress:           netConfig.ENIIPAddress,
-		GatewayIPAddress:    netConfig.GatewayIPAddress,
+		IPAddresses:         netConfig.ENIIPAddresses,
+		GatewayIPAddresses:  netConfig.GatewayIPAddresses,
 		DNSServers:          netConfig.DNS.Nameservers,
 		DNSSuffixSearchList: netConfig.DNS.Search,
 		UseExisting:         netConfig.UseExistingNetwork,
@@ -64,7 +64,7 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 	ep := network.Endpoint{
 		ContainerID: args.ContainerID,
 		NetNSName:   args.Netns,
-		IPAddress:   netConfig.ENIIPAddress,
+		IPAddresses: netConfig.ENIIPAddresses,
 		MACAddress:  netConfig.ENIMACAddress,
 	}
 
@@ -87,8 +87,8 @@ func (plugin *Plugin) Add(args *cniSkel.CmdArgs) error {
 			{
 				Version:   "4",
 				Interface: cniTypesCurrent.Int(0),
-				Address:   *ep.IPAddress,
-				Gateway:   nw.GatewayIPAddress,
+				Address:   *ep.IPAddresses[0],
+				Gateway:   nw.GatewayIPAddresses[0],
 			},
 		},
 	}
@@ -131,7 +131,7 @@ func (plugin *Plugin) Del(args *cniSkel.CmdArgs) error {
 	ep := network.Endpoint{
 		ContainerID: args.ContainerID,
 		NetNSName:   args.Netns,
-		IPAddress:   netConfig.ENIIPAddress,
+		IPAddresses: netConfig.ENIIPAddresses,
 		MACAddress:  netConfig.ENIMACAddress,
 	}
 

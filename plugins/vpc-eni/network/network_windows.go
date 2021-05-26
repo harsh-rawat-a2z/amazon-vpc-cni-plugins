@@ -82,11 +82,11 @@ func (nb *netBuilder) FindOrCreateNetwork(nw *Network) error {
 	if nw.ENI != nil {
 		networkConfig.NetworkAdapterName = nw.ENI.GetLinkName()
 	}
-	if nw.IPAddress != nil {
-		networkConfig.AddressPrefix = vpc.GetSubnetPrefix(nw.IPAddress).String()
+	if len(nw.IPAddresses) != 0 {
+		networkConfig.AddressPrefix = vpc.GetSubnetPrefix(nw.IPAddresses[0]).String()
 	}
-	if nw.GatewayIPAddress != nil {
-		networkConfig.Gateway = nw.GatewayIPAddress.String()
+	if len(nw.GatewayIPAddresses) != 0 {
+		networkConfig.Gateway = nw.GatewayIPAddresses[0].String()
 	}
 
 	// Find/Create the HNS network based on the config.
@@ -135,8 +135,8 @@ func (nb *netBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	if ep.MACAddress != nil {
 		hnsEndpoint.MacAddress = ep.MACAddress.String()
 	}
-	if ep.IPAddress != nil {
-		hnsEndpoint.IPAddress = ep.IPAddress
+	if len(ep.IPAddresses) != 0 {
+		hnsEndpoint.IPAddress = ep.IPAddresses[0]
 	}
 
 	nsType, namespaceIdentifier := nb.getNamespaceIdentifier(ep)
@@ -159,9 +159,9 @@ func (nb *netBuilder) FindOrCreateEndpoint(nw *Network, ep *Endpoint) error {
 	}
 
 	// Update ep and nw with the received response.
-	ep.IPAddress = hnsEndpoint.IPAddress
+	ep.IPAddresses = []*net.IPNet{hnsEndpoint.IPAddress}
 	ep.MACAddress, _ = net.ParseMAC(hnsEndpoint.MacAddress)
-	nw.GatewayIPAddress = net.ParseIP(hnsEndpoint.Gateway)
+	nw.GatewayIPAddresses = []net.IP{net.ParseIP(hnsEndpoint.Gateway)}
 
 	// An existing HNS endpoint was found.
 	if existing {

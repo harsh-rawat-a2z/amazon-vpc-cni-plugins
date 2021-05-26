@@ -31,8 +31,8 @@ type Builder interface {
 type Network struct {
 	Name                string
 	ENI                 *eni.ENI
-	IPAddress           *net.IPNet
-	GatewayIPAddress    net.IP
+	IPAddresses         []*net.IPNet
+	GatewayIPAddresses  []net.IP
 	DNSServers          []string
 	DNSSuffixSearchList []string
 	UseExisting         bool
@@ -42,6 +42,6 @@ type Network struct {
 type Endpoint struct {
 	ContainerID string
 	NetNSName   string
-	IPAddress   *net.IPNet
+	IPAddresses []*net.IPNet
 	MACAddress  net.HardwareAddr
 }
